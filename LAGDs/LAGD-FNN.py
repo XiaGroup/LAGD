@@ -5,44 +5,40 @@ learning aided gradient descent for MISO beamforming
 import numpy as np
 from numpy import random
 import torch
-import torch.nn as nn
-from timeit import default_timer as timer
-import torch
-import torch.nn as nn
-import random
 from timeit import default_timer as timer
 import math
 import copy
 from copy import deepcopy
 import time
 import matplotlib.pyplot as plt
-import scipy.io as scio
 import os
-
 from torch.utils.tensorboard import SummaryWriter
-fold='D:\WMMSE\TB_online41'
+
+fold = 'D:\WMMSE\TB_online'
 folder1 = 'Meta_WSR'
 folder2 = 'WMMSE_WSR'
 folder3 = 'Meta/WMMSE'
-#folder4 = 'Ave_Meta/WMMSE'
-#folder5 = 'Line_1'
-#folder6 = 'Ave_WMMSE_WSR'
-#folder7 = 'Ave_Meta_WSR'
+# folder4 = 'Ave_Meta/WMMSE'
+# folder5 = 'Line_1'
+# folder6 = 'Ave_WMMSE_WSR'
+# folder7 = 'Ave_Meta_WSR'
 folder8 = 'num_meta_iterations'
-#folder9 = 'Ave_meta_iterations'
+# folder9 = 'Ave_meta_iterations'
 folder10 = 'num_WMMSE_iterations'
-#folder11 = 'Ave_WMMSE_iterations'
-writer1 = SummaryWriter(log_dir=os.path.join(fold,folder1), flush_secs=20)
-writer2 = SummaryWriter(log_dir=os.path.join(fold,folder2), flush_secs=20)
-writer3 = SummaryWriter(log_dir=os.path.join(fold,folder3), flush_secs=20)
-#writer4 = SummaryWriter(log_dir=os.path.join(fold,folder4), flush_secs=20)
-#writer5 = SummaryWriter(log_dir=os.path.join(fold,folder5), flush_secs=20)
-#writer6 = SummaryWriter(log_dir=os.path.join(fold,folder6), flush_secs=20)
-#writer7 = SummaryWriter(log_dir=os.path.join(fold,folder7), flush_secs=20)
-writer8 = SummaryWriter(log_dir=os.path.join(fold,folder8), flush_secs=20)
-#writer9 = SummaryWriter(log_dir=os.path.join(fold,folder9), flush_secs=20)
-writer10 = SummaryWriter(log_dir=os.path.join(fold,folder10), flush_secs=20)
-#writer11 = SummaryWriter(log_dir=os.path.join(fold,folder11), flush_secs=20)
+# folder11 = 'Ave_WMMSE_iterations'
+writer1 = SummaryWriter(log_dir=os.path.join(fold, folder1), flush_secs=20)
+writer2 = SummaryWriter(log_dir=os.path.join(fold, folder2), flush_secs=20)
+writer3 = SummaryWriter(log_dir=os.path.join(fold, folder3), flush_secs=20)
+# writer4 = SummaryWriter(log_dir=os.path.join(fold,folder4), flush_secs=20)
+# writer5 = SummaryWriter(log_dir=os.path.join(fold,folder5), flush_secs=20)
+# writer6 = SummaryWriter(log_dir=os.path.join(fold,folder6), flush_secs=20)
+# writer7 = SummaryWriter(log_dir=os.path.join(fold,folder7), flush_secs=20)
+writer8 = SummaryWriter(log_dir=os.path.join(fold, folder8), flush_secs=20)
+# writer9 = SummaryWriter(log_dir=os.path.join(fold,folder9), flush_secs=20)
+writer10 = SummaryWriter(log_dir=os.path.join(fold, folder10), flush_secs=20)
+# writer11 = SummaryWriter(log_dir=os.path.join(fold,folder11), flush_secs=20)
+
+
 USE_CUDA = False
 if torch.cuda.is_available():
     USE_CUDA = True
@@ -51,16 +47,14 @@ gpu_count = torch.cuda.device_count()
 print("GPU_Count : ",gpu_count)
 
 
-
-#device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-#device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+# Set variables
 noise_power = 0.1
 SNR = 30
 nr_of_BS_antennas = 4
 nr_of_users = 4
 
 signal_power = noise_power*10**(SNR/10)
-total_power = noise_power + signal_power  # power constraint in the weighted sum rate maximization problem - eq. (4) in our paper
+total_power = noise_power + signal_power  # power constraint in the weighted sum rate maximization problem - eq. (3) in our paper
 lr_rate_v= 1 *10e-3
 
 WMMSE_Meta = 0 #Meta for 0 or WMMSE_Meta for 1
@@ -81,40 +75,33 @@ layer=2
 epoch=1
 nr_of_training = 100 # used for training
 nr_of_testing = 0 # used for testing
-#nr_of_iterations = 1 # for WMMSE algorithm in Shi et al.
+
 
 test_rate=0.9
 # noise=1
 def Adam():
     return torch.optim.Adam()
 
-# Set variables
+
 
 selected_users = [0,1,2,3,4,5,6,7] # array of scheduled users. Note that we schedule all the users.
 #scheduled_users = [0,1,2,3,4,5,6,7]
 scheduled_users = selected_users
 epsilon = 0.0001 # used to end the iterations of the WMMSE algorithm in Shi et al. when the number of iterations is not fixed (note that the stopping criterion has precendence over the fixed number of iterations)
 power_tolerance = 0.0001 # used to end the bisection search in the WMMSE algorithm in Shi et al.
-
 nr_of_iterations = 10 # for WMMSE algorithm in Shi et al.
+
 
 M_1=torch.eye(nr_of_users)
 M_2=torch.zeros(nr_of_users,nr_of_users)
 M_Re=torch.cat((M_1,M_2),dim=0)
-# print(M_Re)
-
 M_1=torch.eye(nr_of_users)
 M_2=torch.zeros(nr_of_users,nr_of_users)
 M_Im=torch.cat((M_2,M_1),dim=0)
-# print(M_Im)
-# User weights in the weighted sum rate (denoted by alpha in eq. (4) in our paper)
-# user_weights = np.ones(nr_of_users)/nr_of_users
-# user_weights_for_regular_WMMSE = np.ones(nr_of_users)/nr_of_users
-
 user_weights = np.ones(nr_of_users)
 user_weights_for_regular_WMMSE = np.ones(nr_of_users)
 
-
+# run WMMSE algorithm in Shi et al.
 def run_WMMSE(transmitter_precoder, epsilon, channel, selected_users, total_power, noise_power, user_weights, max_nr_of_iterations,
               log=True):
     channel=channel.numpy()
@@ -292,7 +279,9 @@ def run_WMMSE(transmitter_precoder, epsilon, channel, selected_users, total_powe
     # print(WSR)
     # print(WSR[-1])
     return transmitter_precoder, receiver_precoder, mse_weights, WSR[-1] ,nr_of_iteration_counter
-#Equation (3) in Deep unfold
+
+
+#Compute WSR
 def compute_weighted_sum_rate_WMMSE(user_weights, channel, precoder, noise_power, selected_users):
     result = 0
     nr_of_users = np.size(channel, 0)
@@ -303,8 +292,8 @@ def compute_weighted_sum_rate_WMMSE(user_weights, channel, precoder, noise_power
             result = result + user_weights[user_index] * np.log2(1 + user_sinr)
 
     return result
-# Computes a channel realization and returns it in two formats, one for the WMMSE and one for the deep unfolded WMMSE.
-# It also returns the initialization value of the transmitter precoder, which is used as input in the computation graph of the deep unfolded WMMSE.
+
+# Randomly initialize the channel
 def compute_channel(nr_of_BS_antennas, nr_of_users, total_power):
     channel_WMMSE = np.zeros((nr_of_users, nr_of_BS_antennas)) + 1j * np.zeros((nr_of_users, nr_of_BS_antennas))
     for i in range(nr_of_users):
@@ -313,6 +302,7 @@ def compute_channel(nr_of_BS_antennas, nr_of_users, total_power):
         channel_WMMSE[i, :] = np.reshape(result_real, (1, nr_of_BS_antennas)) + 1j * np.reshape(result_imag,(1, nr_of_BS_antennas))
     return channel_WMMSE
 
+#Compute SINR
 def compute_sinr(channel, precoder, noise_power, user_id, selected_users):
     nr_of_users = np.size(channel, 0)
     numerator = (np.absolute(np.matmul(np.conj(channel[user_id, :]), precoder[user_id, :]))) ** 2
@@ -327,6 +317,7 @@ def compute_sinr(channel, precoder, noise_power, user_id, selected_users):
     result = numerator / denominator
     return result
 
+#Compute WSR
 def compute_weighted_sum_rate(user_weights, channel, precoder_in, noise_power, selected_users):
     result = 0
     nr_of_users = np.size(channel, 0)
@@ -345,7 +336,7 @@ def compute_weighted_sum_rate(user_weights, channel, precoder_in, noise_power, s
             # result = result + user_weights[user_index] * np.log2(1 + user_sinr)
     return result
 
-
+#Compute SINR
 def compute_sinr_V(channel, transmitter_precoder_in, noise_power, user_id, selected_users):
     #print('######################')
     #print(channel)
@@ -390,6 +381,7 @@ def compute_sinr_V(channel, transmitter_precoder_in, noise_power, user_id, selec
     result = numerator / denominator
     return result
 
+#Compute loss
 def Compute_Loss_V(user_weights, channel, precoder_in, noise_power, selected_users):
     result = 0
     nr_of_users = np.size(channel, 0)
@@ -424,6 +416,7 @@ def compute_norm_of_complex_array(x):
     result = np.sqrt(np.sum((np.absolute(x)) ** 2))
     return result
 
+#Compute power
 def compute_P(Phi_diag_elements, Sigma_diag_elements, mu):
     nr_of_BS_antennas = Phi_diag_elements.size
     mu_array = mu * np.ones(Phi_diag_elements.size)
@@ -431,7 +424,7 @@ def compute_P(Phi_diag_elements, Sigma_diag_elements, mu):
     result = np.sum(result)
     return result
 
-
+# Initialize the transmitter precoder
 def initia_transmitter_precoder(channel_realization):
     # channel_realization = np.zeros((nr_of_users, nr_of_BS_antennas)) + 1j * np.zeros((nr_of_users, nr_of_BS_antennas))
     # for i in range(nr_of_users):
@@ -475,12 +468,10 @@ output_size_V=DIM_V1
 batchsize_V=DIM_V2
 
 
-#Build optimizee netowrks
-
-
-class LSTM_Optimizee_V(torch.nn.Module):
+#Build LAGD netowrk
+class LAGD_Optimizee_V(torch.nn.Module):
     def __init__(self ):
-        super(LSTM_Optimizee_V,self).__init__()
+        super(LAGD_Optimizee_V,self).__init__()
         self.fnn1=torch.nn.Linear(input_size_V,hidden_size_V)
         # self.fnn2 = torch.nn.Linear(hidden_size_V, hidden_size_V)
         self.out=torch.nn.Linear(hidden_size_V,output_size_V)
@@ -497,32 +488,10 @@ class LSTM_Optimizee_V(torch.nn.Module):
             update=self.out(x)
             update=update.squeeze(0)
             return update, state
-#
-
-# class LSTM_Optimizee_V(torch.nn.Module):
-#     def __init__(self ):
-#         super(LSTM_Optimizee_V,self).__init__()
-#         self.cnn1 = torch.nn.Conv1d(in_channels = 1,out_channels =1,kernel_size = 3,stride=1,padding=1 )
-#         self.cnn2 = torch.nn.Conv1d(in_channels = 1,out_channels =1,kernel_size = 3,stride=1,padding=1 )
-#         self.out=torch.nn.Linear(input_size_V,output_size_V )
-#     def forward(self,gradient, state):
-#             gradient=gradient.unsqueeze(0)
-#             if state is None:
-#                 state=(torch.zeros(layer,batchsize_V,hidden_size_V),
-#                 torch.zeros(layer,batchsize_w,hidden_size_V))
-#             if USE_CUDA:
-#                 state = (torch.zeros(layer, batchsize_V, hidden_size_V).cuda(),
-#                          torch.zeros(layer, batchsize_V, hidden_size_V).cuda())
-#             gradient = gradient.reshape(1,1,nr_of_users*nr_of_BS_antennas*2)
-#             x = self.cnn1(gradient)
-#             x = self.cnn2(x)
-#             x = x.reshape(1,nr_of_users,nr_of_BS_antennas*2)
-#             update=self.out(x)
-#             update=update.squeeze(0)
-#             return update, state
 
 
-optimizee_V=LSTM_Optimizee_V()
+
+optimizee_V=LAGD_Optimizee_V()
 if USE_CUDA:
     optimizee_V = optimizee_V.cuda()
 #adam_global_optimizer_V = torch.optim.Adam(optimizee_V.parameters(),lr = optimizer_lr_V)#update optimizee with adam
@@ -550,9 +519,7 @@ min_WMMSE = 50
 max_meta = 0
 min_meta = 50
 
-#All_random_weight = optimizee_V.lstm.all_weights.copy()
-#For each tranning sample, with given channel, optimize each variable with respect to minimize the 
-#accumlated losses. The WSR is reported but not related to the optimization process.
+#Start the training/testing process
 for batch_step in range(epoch):
     epoch_record_meta=0
     epoch_record_WMMSE=0
@@ -561,9 +528,8 @@ for batch_step in range(epoch):
     Loss_v_list_per_sample=torch.zeros(nr_of_training,External_iteration)
     Loss_w_list_per_sample=torch.zeros(nr_of_training,External_iteration)
 
-    #print(optimizee_V.lstm.all_weights[0][0][0])
     for ex_step in range(nr_of_training):
-        optimizee_V = LSTM_Optimizee_V()
+        optimizee_V = LAGD_Optimizee_V()
         if USE_CUDA:
             optimizee_V = optimizee_V.cuda()
         adam_global_optimizer_V = torch.optim.Adam(optimizee_V.parameters(),
